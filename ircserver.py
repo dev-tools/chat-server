@@ -14,6 +14,8 @@ auth = {'login1': 'password1', 'login': 'password'}
 class IRCServer(IRC):
     hostname = '192.168.0.104'
     channels = []
+    auth = False
+    version = 'pyirc-0.1'
 
     def connectionMade(self):
         log.msg('client connected')
@@ -50,36 +52,54 @@ class IRCServer(IRC):
         if len(parameter_list) > 15:
             log.msg("Message has %d parameters (RFC allows 15):\n{0}".format(len(parameter_list), line))
 
-    def _authparams(self, *args, **kwargs):
-        for key in kwargs.keys():
-            setattr(self, key, kwargs[key])
-        if getattr(self, 'password', None) and getattr(self, 'username', None):
-            if self.username in auth and auth[self.username] == self.password or True:
-                self.sendMessage('NOTICE', 'AUTH :*** You connected on 6667 port')
-                #TODO
-                self.sendMessage(stn['RPL_WELCOME'], self.nickname, ':Welcome to Dev Team IRC')
-                self.sendMessage(stn['RPL_YOURHOST'], self.nickname, ':Welcome to Dev Team IRC')
-                self.sendMessage(stn['RPL_CREATED'], self.nickname, ':Welcome to Dev Team IRC')
-                self.sendMessage(stn['RPL_MYINFO'], self.nickname, ':Welcome to Dev Team IRC')
-                self.sendMessage(stn['RPL_ISUPPORT'], self.nickname, ':Welcome to Dev Team IRC')
-                return None
-            #TODO send ERR_PASSWDMISMATCH
-            self.transport.loseConnection()
+    #def _authparams(self, *args, **kwargs):
+        #for key in kwargs.keys():
+            #setattr(self, key, kwargs[key])
+        #if getattr(self, 'password', None) and getattr(self, 'username', None):
+            #if self.username in auth and auth[self.username] == self.password or True:
+
+                #return None
+            ##TODO send ERR_PASSWDMISMATCH
+            #self.transport.loseConnection()
+
+    def _send_welcome(self):
+        self.sendMessage('NOTICE', 'AUTH :*** You connected on 6667 port')
+        self.sendMessage(stn['RPL_WELCOME'], self.nickname, ':Welcome to Dev Team IRC')
+        self.sendMessage(stn['RPL_YOURHOST'], self.nickname, ':Your host is {0}, running version {1}'.format(self.hostname, self.version))
+        self.sendMessage(stn['RPL_CREATED'], self.nickname, ':This server was created Mon Oct 28 2013 at 09:30:23 EEST')
+        self.sendMessage(stn['RPL_MYINFO'], self.nickname, self.hostname, self.version, 'iowghraAsORTVSxNCWqBzvdHtGpZI', 'lvhopsmntikrRcaqOALQbSeIKVfMCuzNTGjP') #TODO
+        #self.sendMessage(stn['RPL_ISUPPORT'], self.nickname, ':Welcome to Dev Team IRC') #TODO
 
     def irc_unknown(self, prefix, command, params):
         log.msg("{0}, {1}, {2}, IRC UNKNOWN".format(prefix, command, params))
 
     def irc_USER(self, prefix, params):
-        if len(params) == 4:
-            self._authparams(username=params[0], mode=params[1],
-                             unused=params[2], realname=params[3])
+        if len(params) < 4:
+            self.sendMessage(stn['ERR_NEEDMOREPARAMS'], self.nickname, ':Need more params.')
+            return None
+        #TODO ERR_ALREADYREGISTRED
+        self.username=params[0]
+        self.mode=params[1]
+        self.unused=params[2]
+        self.realname=params[3]
+        if not self.auth:
+            self._send_welcome()
 
     def irc_NICK(self, prefix, params):
+        #TODO ERR_NONICKNAMEGIVEN
+        #TODO ERR_ERRONEUSNICKNAME
+        #TODO ERR_NICKNAMEINUSE
+        #TODO ERR_NICKCOLLISION
+        #TODO ERR_UNAVAILRESOURCE
+        #TODO ERR_RESTRICTED
         self.nickname = params[0]
 
     def irc_PASS(self, prefix, params):
-        if len(params):
-            self._authparams(password=params[0])
+        if not len(params):
+            self.sendMessage(stn['ERR_NEEDMOREPARAMS'], self.nickname, ':Need more params.')
+            return None
+        #TODO ERR_ALREADYREGISTRED
+        self.password = params[0]
 
     def irc_PING(self, prefix, params):
         self.sendMessage('PONG')
@@ -96,15 +116,14 @@ class IRCServer(IRC):
         self.sendMessage(stn['RPL_ENDOFNAMES'], self.nickname, ch.name, ':{0}'.format('End of /NAMES list.'))
         self.sendMessage(stn['RPL_TOPIC'], self.nickname, ch.name, ':{0}'.format('Welcome to channel'))
 
-
     def irc_QUIT(self, prefix, params):
+        self.sendMessage('QUIT', ':Quit: {0}'.format(params[0]), **{'prefix': self.nickname + '!~' + self.username + '@' + self.get_host()})
         log.msg('client is logging off')
         self.transport.loseConnection()
         for ch in self.channels:
             for i in ch.users:
                 if i == self:
                     ch.users.remove(i)
-            #ch.senduserlist()
 
     def irc_LIST(self, prefix, params):
         self.sendMessage(stn['RPL_LISTSTART'], self.nickname, 'Channel :Users  Name')
