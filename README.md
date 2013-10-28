@@ -1,2 +1,2 @@
-chat-server
+IRC server
 ===========
