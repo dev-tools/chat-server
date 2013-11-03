@@ -378,11 +378,11 @@ def checkusers(factory):
     log.msg('Online now: {0} | {1}'.format(len(factory.users), factory.users))
     [u.send_PING() for u in factory.users]
 
-
-factory = IRCServerFactory()
-reactor.listenTCP(6667, factory)
-close = task.LoopingCall(closeunactiv, factory)
-close.start(60.0)
-check = task.LoopingCall(checkusers, factory)
-check.start(30.0)
-reactor.run()
+if __name__ == "__main__":
+    factory = IRCServerFactory()
+    reactor.listenTCP(6667, factory)
+    close = task.LoopingCall(closeunactiv, factory)
+    close.start(60.0)
+    check = task.LoopingCall(checkusers, factory)
+    check.start(30.0)
+    reactor.run()

@@ -1,1 +1,3 @@
 Twisted
+pytest
+pytest-twisted
