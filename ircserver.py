@@ -193,7 +193,7 @@ class IRCServer(IRC):
         self.sendMessage('JOIN', ':{0}'.format(ch.name), **{'prefix': self.nickname + '!~' + self.username + '@' + self.get_host()})
         self.sendMessage(stn['RPL_NAMREPLY'], self.nickname, '=', ch.name, ':{0}'.format(' '.join([i.nickname for i in ch.users])))
         self.sendMessage(stn['RPL_ENDOFNAMES'], self.nickname, ch.name, ':{0}'.format('End of /NAMES list.'))
-        self.sendMessage(stn['RPL_TOPIC'], self.nickname, ch.name, ':{0}'.format('Welcome to channel'))
+        self.sendMessage(stn['RPL_TOPIC'], self.nickname, ch.name, ':{0}'.format(ch.topic))
 
     def irc_PART(self, prefix, params):
         """
@@ -220,6 +220,30 @@ class IRCServer(IRC):
         for ch in self.factory.channel_list:
             self.sendMessage(stn['RPL_LIST'], self.nickname, ch.name, ch.count(), ':[+nt] ' + ch.topic)
         self.sendMessage(stn['RPL_LISTEND'], self.nickname, ':END of /LIST')
+
+    def irc_TOPIC(self, prefix, params):
+        """
+        <channel> [»: " <topic> ]
+        ERR_NEEDMOREPARAMS +
+        ERR_NOTONCHANNEL +
+        RPL_NOTOPIC +
+        RPL_TOPIC +
+        ERR_CHANOPRIVSNEEDED -
+        ERR_NOCHANMODES -
+        """
+        if not len(params) or params[0][0] != '#':
+            self.sendMessage(stn['ERR_NEEDMOREPARAMS'], self.nickname, ':Need more params.')
+            return None
+        ch = self.get_channel(params[0])
+        if not ch:
+            self.sendMessage(stn['ERR_NOTONCHANNEL'], self.nickname, ':Not on channel.')
+            return None
+        if len(params) == 2:
+            ch.topic = params[1]
+        if len(ch.topic):
+            self.sendMessage(stn['RPL_TOPIC'], self.nickname, ch.name, ':{0}'.format(ch.topic))
+        else:
+            self.sendMessage(stn['RPL_NOTOPIC'], self.nickname, ':Not topic.')
 
     #Sending a message
     def irc_PRIVMSG(self, prefix, params):
