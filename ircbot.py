@@ -10,11 +10,6 @@ from twisted.internet import task
 from bash import BashOrg
 
 
-log.startLogging(sys.stdout)
-host = '127.0.0.1'
-port = 6667
-
-
 class IRCBot(IRCClient):
     nickname = "Iriska"
 
@@ -55,22 +50,31 @@ class IRCBot(IRCClient):
 
     def joined(self, channel):
         time.sleep(3)
-        self.bash_start()
+        bashloop = task.LoopingCall(self.bash_loop)
+        bashloop.start(10.0)
         log.msg("[I have joined {0}]".format(channel))
+
+    def parse_command(self, msg):
+        raw = msg.split(' ')
+        return raw[0], raw[1:]
 
     def privmsg(self, user, channel, msg):
         user = user.split('!', 1)[0]
         log.msg("<{0}> {1}".format(user, msg))
 
         if channel == self.nickname:
-            msg = "It isn't nice to whisper!  Play nice with the group."
-            self.msg(user, msg)
-            return
+            recipient = user
+            prefix = ' '
 
-        if msg.startswith(self.nickname + ":"):
-            msg = "{0}: I am a twisted bot".format(user)
-            self.msg(channel, msg)
-            log.msg("<{0}> {1}".format(self.nickname, msg))
+        elif msg.startswith(self.nickname + ":"):
+            recipient = channel
+            prefix = '{0}: '.format(user)
+            msg = msg.replace(self.nickname + ": ", '')
+
+        else:
+            return
+        command, params = self.parse_command(msg)
+        self.botCommand(command, prefix, params, recipient)
 
     def action(self, user, channel, msg):
         user = user.split('!', 1)[0]
@@ -91,26 +95,74 @@ class IRCBot(IRCClient):
         """
         return nickname + '^'
 
-    def bash_start(self):
-        bashloop = task.LoopingCall(self.get_bashorg)
-        bashloop.start(10.0)
+    def bash_loop(self):
+        if self.factory.bashloop:
+            self.get_bashorg()
 
     def get_bashorg(self):
-        ch = '#' + factory.channel
-        b = BashOrg()
-        msg = b.get_quote()[0]
-        for s in msg.split('\n'):
+        ch = '#' + self.factory.channel
+        for s in self.get_bash_quote().split('\n'):
             self.msg(ch, s)
         self.msg(ch, '-' * 150)
 
+    def get_bash_quote(self):
+        b = BashOrg()
+        return b.get_quote()[0]
+
+
+class IrcBotCommands(IRCBot):
+
+    def botCommand(self, command, prefix, params, recipient):
+        method = getattr(self, "bot_%s" % command, None)
+        try:
+            if method is not None:
+                method(prefix, params, recipient)
+            else:
+                self.bot_unknown(prefix, command, params, recipient)
+        except:
+            log.deferr()
+
+    def bot_unknown(self, prefix, command, params, recipient):
+        log.msg("{0}, {1}, {2}, {3}, BOT UNKNOWN".format(prefix, command,
+                                                         params, recipient))
+        self.msg(recipient, prefix + ' UNKNOWN BOT COMMAND')
+
+    def bot_help(self, prefix, params, recipient):
+        help_commands = []
+        for i in dir(self):
+            if i.startswith('bot_') and i != 'bot_unknown' and i != 'bot_help':
+                help_commands.append(i.replace('bot_', ''))
+        for c in help_commands:
+            self.msg(recipient, prefix + c)
+
+    def bot_bash(self, prefix, params, recipient):
+        for s in self.get_bash_quote().split('\n'):
+            self.msg(recipient, prefix + s)
+        self.msg(recipient, prefix + '-' * 150)
+
+    def bot_bashloop(self, prefix, params, recipient):
+        bashloop = str(self.factory.bashloop)
+        if not len(params):
+            self.msg(recipient, prefix + 'Status: {0}'.format(bashloop))
+            return
+        status = params[0].lower()
+        if status not in ['true', 'false']:
+            self.msg(recipient, prefix + 'status can be true or false')
+            return None
+        if status == 'true':
+            self.factory.bashloop = bool(1)
+        elif status == 'false':
+            self.factory.bashloop = bool(0)
+        self.msg(recipient, prefix + 'Bashloop set is {0}'.format(status))
 
 
 class IRCClientFactory(ClientFactory):
     def __init__(self, channel):
         self.channel = channel
+        self.bashloop = False
 
     def buildProtocol(self, addr):
-        p = IRCBot()
+        p = IrcBotCommands()
         p.factory = self
         self.p = p
         return p
@@ -123,8 +175,9 @@ class IRCClientFactory(ClientFactory):
         reactor.stop()
 
 
-factory = IRCClientFactory('dev')
-reactor.connectTCP(host, port, factory)
-#bashloop = task.LoopingCall(get_bashorg, factory)
-#bashloop.start(10.0)
-reactor.run()
+if __name__ == "__main__":
+    log.startLogging(sys.stdout)
+    host = '127.0.0.1'
+    port = 6667
+    reactor.connectTCP(host, port, IRCClientFactory('dev'))
+    reactor.run()

@@ -11,11 +11,9 @@ import time
 import sys
 import socket
 
-log.startLogging(sys.stdout)
+
 connectionDone = failure.Failure(error.ConnectionDone())
 connectionDone.cleanFailure()
-
-auth = {'login1': 'password1', 'login': 'password'}
 
 
 class IRCServer(IRC):
@@ -45,6 +43,7 @@ class IRCServer(IRC):
         for ch in self.channels:
             ch.removeuser(self)
         self.factory.user_exit(self)
+        IRC.connectionLost(self, reason)
 
     def get_host(self):
         return self.transport.getPeer().host
@@ -411,10 +410,16 @@ def checkusers(factory):
     [u.send_PING() for u in factory.users]
 
 
-factory = IRCServerFactory()
-reactor.listenTCP(6667, factory)
-close = task.LoopingCall(closeunactiv, factory)
-close.start(60.0)
-check = task.LoopingCall(checkusers, factory)
-check.start(30.0)
-reactor.run()
+if __name__ == "__main__":
+    log.startLogging(sys.stdout)
+
+
+    auth = {'login1': 'password1', 'login': 'password'}
+
+    factory = IRCServerFactory()
+    reactor.listenTCP(6667, factory)
+    close = task.LoopingCall(closeunactiv, factory)
+    close.start(60.0)
+    check = task.LoopingCall(checkusers, factory)
+    check.start(30.0)
+    reactor.run()
