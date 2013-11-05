@@ -242,6 +242,9 @@ class IRCServer(IRC):
             return None
         if len(params) == 2:
             ch.topic = params[1]
+            for u in ch.users:
+                u.sendMessage(stn['RPL_TOPIC'], u.nickname, ch.name, ':{0}'.format(ch.topic))
+            return None
         if len(ch.topic):
             self.sendMessage(stn['RPL_TOPIC'], self.nickname, ch.name, ':{0}'.format(ch.topic))
         else:
