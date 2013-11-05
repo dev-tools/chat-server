@@ -147,12 +147,14 @@ class IRCServer(IRC):
             return None
         if not self.factory.username_validate(params[0]):
             self.sendMessage(stn['ERR_ALREADYREGISTRED'], self.nickname, ':Username already registred.')
+            return None
         self.username = params[0]
         self.mode = params[1]
         self.unused = params[2]
         self.realname = params[3]
         if not self.auth:
             self._send_welcome()
+            self._send_motd()
         #TODO register
 
     def irc_QUIT(self, prefix, params):
@@ -288,6 +290,26 @@ class IRCServer(IRC):
             self.sendMessage(stn['RPL_WHOREPLY'], self.nickname, ch.name, user.nickname)
         self.sendMessage(stn['RPL_ENDOFWHO'], self.nickname, ch.name, ':End of /WHO list.')
 
+    #Working with server
+    def _send_motd(self):
+        self.sendMessage(stn['RPL_MOTDSTART'], self.nickname,  ':- Message of the Day - ')
+        for row in self.factory.MOTD:
+            self.sendMessage(stn['RPL_MOTD'], self.nickname,  ':{0}'.format(row))
+        self.sendMessage(stn['RPL_ENDOFMOTD'], self.nickname,  ':End of /MOTD command.')
+
+    def irc_MOTD(self, prefix, params):
+        """
+        [ <target> ]
+        RPL_MOTDSTART +
+        RPL_MOTD +
+        RPL_ENDOFMOTD +
+        ERR_NOMOTD +
+        """
+        if self.factory.MOTD:
+            self._sendsend_motd()
+            return None
+        self.sendMessage(stn['ERR_NOMOTD'], self.nickname,  ':No MOTD.')
+
     #Other commands
     def irc_PING(self, prefix, params):
         self.sendMessage('PONG')
@@ -300,7 +322,7 @@ class IRCChannel(object):
 
     def __init__(self, name):
         self.name = name
-        self.topic = 'channel topic'
+        self.topic = 'Topic'
         self.users = []
 
     def count(self):
@@ -336,6 +358,13 @@ class IRCChannel(object):
 class IRCServerFactory(ServerFactory):
     channel_list = []
     users = []
+    MOTD = ['=' * 150,
+            'Добро пожаловать в IRC',
+            '',
+            'У нас появился чат бот Iriska',
+            '',
+            'Прошу не обижать :)',
+            'Она пока что умеет только постить цитаты с баша',]
 
     def get_channel(self, name):
         for ch in self.channel_list:
@@ -378,11 +407,11 @@ def checkusers(factory):
     log.msg('Online now: {0} | {1}'.format(len(factory.users), factory.users))
     [u.send_PING() for u in factory.users]
 
-if __name__ == "__main__":
-    factory = IRCServerFactory()
-    reactor.listenTCP(6667, factory)
-    close = task.LoopingCall(closeunactiv, factory)
-    close.start(60.0)
-    check = task.LoopingCall(checkusers, factory)
-    check.start(30.0)
-    reactor.run()
+
+factory = IRCServerFactory()
+reactor.listenTCP(6667, factory)
+close = task.LoopingCall(closeunactiv, factory)
+close.start(60.0)
+check = task.LoopingCall(checkusers, factory)
+check.start(30.0)
+reactor.run()
