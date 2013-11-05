@@ -366,7 +366,7 @@ class IRCServerFactory(ServerFactory):
             'У нас появился чат бот Iriska',
             '',
             'Прошу не обижать :)',
-            'Она пока что умеет только постить цитаты с баша',]
+            'что бы узнать список комманд бота отправте ей сообщение help']
 
     def get_channel(self, name):
         for ch in self.channel_list:
@@ -412,8 +412,6 @@ def checkusers(factory):
 
 if __name__ == "__main__":
     log.startLogging(sys.stdout)
-
-
     auth = {'login1': 'password1', 'login': 'password'}
 
     factory = IRCServerFactory()

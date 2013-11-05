@@ -49,9 +49,6 @@ class IRCBot(IRCClient):
         self.join(self.factory.channel)
 
     def joined(self, channel):
-        time.sleep(3)
-        bashloop = task.LoopingCall(self.bash_loop)
-        bashloop.start(10.0)
         log.msg("[I have joined {0}]".format(channel))
 
     def parse_command(self, msg):
@@ -95,8 +92,27 @@ class IRCBot(IRCClient):
         """
         return nickname + '^'
 
+
+class BashMixin(object):
+    bashloop = False
+    bashtimeout = 10
+
+    #TODO
+    def joined(self, channel):
+        IRCBot.joined(self, channel)
+        time.sleep(2)
+        loop = task.LoopingCall(self.bash_loop)
+        loop.start(self.bashtimeout)
+
+    def startbashloop(self):
+        self.taskloop = task.LoopingCall(self.bash_loop)
+        self.taskloop.start(self.bashtimeout)
+
+    def stopbashloop(self):
+        self.taskloop.stop()
+
     def bash_loop(self):
-        if self.factory.bashloop:
+        if self.bashloop:
             self.get_bashorg()
 
     def get_bashorg(self):
@@ -109,8 +125,28 @@ class IRCBot(IRCClient):
         b = BashOrg()
         return b.get_quote()[0]
 
+    def bot_bash(self, prefix, params, recipient):
+        for s in self.get_bash_quote().split('\n'):
+            self.msg(recipient, prefix + s)
+        self.msg(recipient, prefix + '-' * 150)
 
-class IrcBotCommands(IRCBot):
+    def bot_bashloop(self, prefix, params, recipient):
+        bashloop = str(self.bashloop)
+        if not len(params):
+            self.msg(recipient, prefix + 'Status: {0}'.format(bashloop))
+            return
+        status = params[0].lower()
+        if status not in ['true', 'false']:
+            self.msg(recipient, prefix + 'status can be true or false')
+            return None
+        if status == 'true':
+            self.bashloop = bool(1)
+        elif status == 'false':
+            self.bashloop = bool(0)
+        self.msg(recipient, prefix + 'Bashloop set is {0}'.format(status))
+
+
+class IrcBotCommands(BashMixin, IRCBot):
 
     def botCommand(self, command, prefix, params, recipient):
         method = getattr(self, "bot_%s" % command, None)
@@ -135,31 +171,10 @@ class IrcBotCommands(IRCBot):
         for c in help_commands:
             self.msg(recipient, prefix + c)
 
-    def bot_bash(self, prefix, params, recipient):
-        for s in self.get_bash_quote().split('\n'):
-            self.msg(recipient, prefix + s)
-        self.msg(recipient, prefix + '-' * 150)
-
-    def bot_bashloop(self, prefix, params, recipient):
-        bashloop = str(self.factory.bashloop)
-        if not len(params):
-            self.msg(recipient, prefix + 'Status: {0}'.format(bashloop))
-            return
-        status = params[0].lower()
-        if status not in ['true', 'false']:
-            self.msg(recipient, prefix + 'status can be true or false')
-            return None
-        if status == 'true':
-            self.factory.bashloop = bool(1)
-        elif status == 'false':
-            self.factory.bashloop = bool(0)
-        self.msg(recipient, prefix + 'Bashloop set is {0}'.format(status))
-
 
 class IRCClientFactory(ClientFactory):
     def __init__(self, channel):
         self.channel = channel
-        self.bashloop = False
 
     def buildProtocol(self, addr):
         p = IrcBotCommands()
